@@ -39,10 +39,16 @@ const PDFIUM_SHARED_TAG: &str = "chromium/7802";
 
 /// sha256 of the pinned tarball per platform "os-arch". Verified on download;
 /// entries are filled as each platform's artifact is prepped for CI.
-const KNOWN_HASHES: &[(&str, &str)] = &[(
-    "linux-x64",
-    "13908bb2d40a6e017c4c5a6a7baecc6efd7b1c30392c8a79e80072d2b48b18eb",
-)];
+const KNOWN_HASHES: &[(&str, &str)] = &[
+    (
+        "linux-x64",
+        "13908bb2d40a6e017c4c5a6a7baecc6efd7b1c30392c8a79e80072d2b48b18eb",
+    ),
+    (
+        "mac-x64",
+        "c097fd17a07826bb36617dda0cd02bd7829c0f2087f33e927124df21dc5cef06",
+    ),
+];
 
 fn main() {
     // Declare the custom cfg so rustc doesn't warn about it.
@@ -372,7 +378,10 @@ fn fetch_pdfium(os: &str, arch: &str, vendored: &Path) {
             "pdfium: sha256 mismatch for {pair} (expected {hash}, got {got})"
         );
     } else {
-        eprintln!("donsetch build: no pinned sha256 for pdfium {pair} yet (unverified download)");
+        panic!(
+            "pdfium: no pinned sha256 for {pair} — refusing to link an unverified binary. \
+             Pin one in KNOWN_HASHES (compute it from the release at {url})"
+        );
     }
 
     let status = Command::new("tar")

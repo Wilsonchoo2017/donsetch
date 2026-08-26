@@ -357,8 +357,6 @@ impl Ghost {
             "--disable-background-networking".into(),
             "--disable-component-update".into(),
             "--disable-sync".into(),
-            "--no-sandbox".into(),
-            "--disable-setuid-sandbox".into(),
             "--disable-translate".into(),
             "--mute-audio".into(),
             // ── Disk cache suppression ──
@@ -370,6 +368,14 @@ impl Ghost {
             "--disable-gpu-shader-disk-cache".into(),
             "--disable-features=SiteEngagementService".into(),
         ];
+        // Chrome renders hostile, bot-walled pages with full JS —
+        // keep its sandbox on. Only disable it if the host truly
+        // can't support it (e.g. a container without CAP_SYS_ADMIN
+        // and no user namespaces), and only via explicit opt-in.
+        if std::env::var("DONSETCH_UNSAFE_NO_SANDBOX").as_deref() == Ok("1") {
+            chrome_args.push("--no-sandbox".into());
+            chrome_args.push("--disable-setuid-sandbox".into());
+        }
         // ── HTTP proxy (env var) ──
         // If HTTP_PROXY/HTTPS_PROXY/ALL_PROXY is set, route the
         // Ghost browser through the same proxy as tier 1. Chrome
@@ -704,6 +710,16 @@ impl Ghost {
 
     /// PNG screenshot → path (D16 byproduct).
     pub async fn screenshot(&self, path: &str) -> Result<(), FetchError> {
+        // `path` comes straight from an MCP tool call arg — confine it
+        // to a filename under the shots dir so a caller can't write
+        // (or overwrite) an arbitrary file on the host.
+        let name = std::path::Path::new(path)
+            .file_name()
+            .ok_or_else(|| FetchError::ghost("screenshot: invalid path"))?;
+        let dir = crate::paths::cache_dir().join("shots");
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| FetchError::ghost(format!("screenshot: {e}")))?;
+        let path = dir.join(name);
         let data = self
             .cdp
             .call(

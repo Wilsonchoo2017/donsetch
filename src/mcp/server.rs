@@ -1342,6 +1342,21 @@ async fn fetch_single_inner(daemon: &Arc<Daemon>, args: &Value, url: &str) -> Va
         Ok(u) => u,
         Err(_) => return tool_error(format!("invalid URL: {url}")),
     };
+    // Scheme allowlist: this guard also gates the ghost/actions path
+    // (tier=2), which has no separate scheme check like tier-1's
+    // fetch::client does. Without this, host_str() is None for
+    // file:// URLs and the SSRF check below is silently skipped,
+    // letting the browser navigate to local files.
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return tool_error_structured(
+            format!("blocked: unsupported scheme {:?} — only http/https are allowed", parsed.scheme()),
+            "permanent",
+            Some(json!({
+                "url": url,
+                "next_action": "only http/https URLs can be fetched",
+            })),
+        );
+    }
     if let Some(host) = parsed.host_str()
         && crate::fetch::guards::is_ssrf_host(host)
     {
